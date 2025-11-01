@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 import joblib
 import tsfel
+from streamlit_mic_recorder import mic_recorder
 
 # === 1. Load model & scaler ===
 model = joblib.load('model_randomforest_tsfel.pkl')
@@ -25,36 +26,60 @@ cfg = tsfel.get_features_by_domain('statistical')
 st.title("🎙️ Voice Command Recognition - Buka/Tutup")
 st.write("Ucapkan 'buka' atau 'tutup', lalu lihat hasil prediksi di bawah ini.")
 
-# === 4. Upload file audio ===
-uploaded_file = st.file_uploader("Unggah file suara (.wav / .mp3)", type=["wav", "mp3"])
+# === 4. Pilihan input ===
+st.subheader("🎧 Pilih metode input suara:")
+input_choice = st.radio("Pilih salah satu:", ["🎤 Rekam Langsung", "📂 Upload File"])
 
-if uploaded_file is not None:
-    # Simpan file sementara
-    with open("temp_audio.wav", "wb") as f:
-        f.write(uploaded_file.getbuffer())
+file_path = None
 
-    # === 5. Load audio dan ekstrak fitur ===
-    signal, sr = librosa.load("temp_audio.wav", sr=None)
+# === 5. Mode rekam suara ===
+if input_choice == "🎤 Rekam Langsung":
+    st.info("Tekan tombol di bawah untuk mulai rekam, lalu tekan lagi untuk berhenti.")
+    audio_data = mic_recorder(
+        start_prompt="Mulai Rekam 🎙️",
+        stop_prompt="Berhenti ⏹️",
+        just_once=False,
+        use_container_width=True,
+    )
+
+    if audio_data:
+        st.audio(audio_data["bytes"])
+        with open("temp_audio.wav", "wb") as f:
+            f.write(audio_data["bytes"])
+        file_path = "temp_audio.wav"
+
+# === 6. Mode upload file ===
+elif input_choice == "📂 Upload File":
+    uploaded_file = st.file_uploader("Unggah file suara (.wav / .mp3)", type=["wav", "mp3"])
+    if uploaded_file:
+        with open("temp_audio.wav", "wb") as f:
+            f.write(uploaded_file.getbuffer())
+        file_path = "temp_audio.wav"
+        st.audio(uploaded_file)
+
+# === 7. Jika ada file audio, lakukan prediksi ===
+if file_path:
+    # Load audio
+    signal, sr = librosa.load(file_path, sr=None)
+    
+    # Ekstraksi fitur TSFEL
     df_features = tsfel.time_series_features_extractor(cfg, signal, fs=sr)
-
-    # Pastikan hanya fitur statistik (drop label, dll)
     X_new = df_features.values
 
-    # Normalisasi sesuai scaler training
+    # Normalisasi
     X_new_scaled = scaler.transform(X_new)
 
-    # === 6. Prediksi ===
+    # Prediksi
     prediction = model.predict(X_new_scaled)
     proba = model.predict_proba(X_new_scaled)[0]
 
     label = prediction[0]
     confidence = np.max(proba) * 100
 
-    # === 7. Tampilkan hasil ===
+    # Hasil prediksi
     st.success(f"🎯 Prediksi: **{label.upper()}** (Confidence: {confidence:.2f}%)")
 
-    # === 8. (Opsional) Visualisasi bentuk gelombang ===
-    st.audio(uploaded_file)
+    # Visualisasi sinyal
     st.line_chart(signal)
 else:
-    st.info("Silakan unggah file suara terlebih dahulu untuk diprediksi.")
+    st.info("Silakan rekam atau unggah file suara terlebih dahulu untuk diprediksi.")
