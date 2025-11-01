@@ -1,7 +1,8 @@
 streamlit
+streamlit-mic-recorder
+librosa
 numpy
 pandas
-librosa
 joblib
 scikit-learn
 tsfel
