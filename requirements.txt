@@ -6,3 +6,4 @@ pandas
 joblib
 scikit-learn
 tsfel
+soundfile
