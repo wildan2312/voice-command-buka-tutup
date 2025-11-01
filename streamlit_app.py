@@ -14,6 +14,7 @@ import pandas as pd
 import joblib
 import tsfel
 from streamlit_mic_recorder import mic_recorder
+import soundfile as sf
 
 # === 1. Load model & scaler ===
 model = joblib.load('model_randomforest_tsfel.pkl')
@@ -60,7 +61,12 @@ elif input_choice == "📂 Upload File":
 # === 7. Jika ada file audio, lakukan prediksi ===
 if file_path:
     # Load audio
-    signal, sr = librosa.load(file_path, sr=None)
+    try:
+        signal, sr = sf.read(file_path)
+        if signal.ndim > 1:
+            signal = np.mean(signal, axis=1)
+    except Exception as e:
+        signal, sr = librosa.load(file_path, sr=None)
     
     # Ekstraksi fitur TSFEL
     df_features = tsfel.time_series_features_extractor(cfg, signal, fs=sr)
