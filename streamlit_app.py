@@ -7,10 +7,6 @@ Original file is located at
     https://colab.research.google.com/drive/12AAycL5e0sg22dNVvs85H_Q_yeZnhZqT
 """
 
-pip install streamlit
-
-pip install tsfel librosa pandas scikit-learn
-
 import streamlit as st
 import librosa
 import numpy as np
