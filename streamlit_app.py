@@ -15,6 +15,7 @@ import joblib
 import tsfel
 from streamlit_mic_recorder import mic_recorder
 import soundfile as sf
+from pydub import AudioSegment
 
 # === 1. Load model & scaler ===
 model = joblib.load('model_randomforest_tsfel.pkl')
@@ -62,11 +63,15 @@ elif input_choice == "📂 Upload File":
 if file_path:
     # Load audio
     try:
-        signal, sr = sf.read(file_path)
-        if signal.ndim > 1:
-            signal = np.mean(signal, axis=1)
+        audio = AudioSegment.from_file(file_path)
+        sr = audio.frame_rate
+        samples = np.array(audio.get_array_of_samples(), dtype=np.float32)
+        # normalisasi agar mirip output librosa
+        signal = samples / np.max(np.abs(samples))
     except Exception as e:
-        signal, sr = librosa.load(file_path, sr=None)
+        st.error(f"Gagal membaca file audio: {e}")
+        st.stop()
+
     
     # Ekstraksi fitur TSFEL
     df_features = tsfel.time_series_features_extractor(cfg, signal, fs=sr)
