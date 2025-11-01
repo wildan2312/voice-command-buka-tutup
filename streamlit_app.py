@@ -89,8 +89,5 @@ if file_path:
 
     # Hasil prediksi
     st.success(f"🎯 Prediksi: **{label.upper()}** (Confidence: {confidence:.2f}%)")
-
-    # Visualisasi sinyal
-    st.line_chart(signal)
 else:
     st.info("Silakan rekam atau unggah file suara terlebih dahulu untuk diprediksi.")
