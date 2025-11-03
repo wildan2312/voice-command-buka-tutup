@@ -14,8 +14,9 @@ import pandas as pd
 import joblib
 import tsfel
 from streamlit_mic_recorder import mic_recorder
-import soundfile as sf
 from pydub import AudioSegment
+import soundfile as sf
+import os
 
 # === 1. Load model & scaler ===
 model = joblib.load('model_randomforest_tsfel.pkl')
@@ -26,7 +27,7 @@ cfg = tsfel.get_features_by_domain('statistical')
 
 # === 3. UI Streamlit ===
 st.title("🎙️ Voice Command Recognition - Buka/Tutup")
-st.write("Ucapkan 'buka' atau 'tutup', lalu lihat hasil prediksi di bawah ini.")
+st.write("Ucapkan **'buka'** atau **'tutup'**, lalu lihat hasil prediksi di bawah ini.")
 
 # === 4. Pilihan input ===
 st.subheader("🎧 Pilih metode input suara:")
@@ -61,33 +62,43 @@ elif input_choice == "📂 Upload File":
 
 # === 7. Jika ada file audio, lakukan prediksi ===
 if file_path:
-    # Load audio
     try:
+        # Load audio
         audio = AudioSegment.from_file(file_path)
         sr = audio.frame_rate
         samples = np.array(audio.get_array_of_samples(), dtype=np.float32)
-        # normalisasi agar mirip output librosa
         signal = samples / np.max(np.abs(samples))
+
+        # ==== Tambahan: trimming dan deteksi hening ====
+        signal, _ = librosa.effects.trim(signal)  # buang bagian hening di awal/akhir
+        energy = np.sum(signal ** 2) / len(signal)
+
+        if energy < 0.001:
+            st.warning("🔇 Tidak terdeteksi suara signifikan, coba bicara lebih keras.")
+            st.stop()
+
+        # ==== Ekstraksi fitur TSFEL ====
+        df_features = tsfel.time_series_features_extractor(cfg, signal, fs=sr, verbose=0)
+        X_new = df_features.values
+
+        # ==== Normalisasi ====
+        X_new_scaled = scaler.transform(X_new)
+
+        # ==== Prediksi ====
+        prediction = model.predict(X_new_scaled)
+        proba = model.predict_proba(X_new_scaled)[0]
+
+        label = prediction[0]
+        confidence = np.max(proba) * 100
+
+        # ==== Hasil prediksi ====
+        if confidence < 60:
+            st.warning("🤔 Suara kurang jelas, coba ulangi pengucapan.")
+        else:
+            st.success(f"🎯 Prediksi: **{label.upper()}** (Confidence: {confidence:.2f}%)")
+
     except Exception as e:
         st.error(f"Gagal membaca file audio: {e}")
-        st.stop()
 
-    
-    # Ekstraksi fitur TSFEL
-    df_features = tsfel.time_series_features_extractor(cfg, signal, fs=sr)
-    X_new = df_features.values
-
-    # Normalisasi
-    X_new_scaled = scaler.transform(X_new)
-
-    # Prediksi
-    prediction = model.predict(X_new_scaled)
-    proba = model.predict_proba(X_new_scaled)[0]
-
-    label = prediction[0]
-    confidence = np.max(proba) * 100
-
-    # Hasil prediksi
-    st.success(f"🎯 Prediksi: **{label.upper()}** (Confidence: {confidence:.2f}%)")
 else:
     st.info("Silakan rekam atau unggah file suara terlebih dahulu untuk diprediksi.")
