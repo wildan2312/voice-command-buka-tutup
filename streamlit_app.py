@@ -52,33 +52,45 @@ elif input_choice == "📂 Upload File":
 
 # === 7. Jika ada file audio, lakukan prediksi ===
 if file_path:
-    # Load audio
     try:
+        # Load audio
         audio = AudioSegment.from_file(file_path)
         sr = audio.frame_rate
         samples = np.array(audio.get_array_of_samples(), dtype=np.float32)
-        # normalisasi agar mirip output librosa
-        signal = samples / np.max(np.abs(samples))
+        signal = samples / np.max(np.abs(samples))  # Normalisasi ke -1..1
+
+        # === Ekstraksi fitur TSFEL ===
+        df_features = tsfel.time_series_features_extractor(cfg, signal, fs=sr)
+
+        # === Penyesuaian fitur agar cocok dengan scaler ===
+        train_features = getattr(scaler, "feature_names_in_", None)
+        if train_features is not None:
+            missing_cols = set(train_features) - set(df_features.columns)
+            extra_cols = set(df_features.columns) - set(train_features)
+
+            # Tambah kolom kosong untuk fitur yang hilang
+            for col in missing_cols:
+                df_features[col] = 0
+
+            # Hapus fitur ekstra
+            df_features = df_features[train_features]
+
+        X_new = df_features.values
+
+        # === Normalisasi ===
+        X_new_scaled = scaler.transform(X_new)
+
+        # === Prediksi ===
+        prediction = model.predict(X_new_scaled)
+        proba = model.predict_proba(X_new_scaled)[0]
+
+        label = prediction[0]
+        confidence = np.max(proba) * 100
+
+        # === Hasil prediksi ===
+        st.success(f"🎯 Prediksi: **{label.upper()}** (Confidence: {confidence:.2f}%)")
+
     except Exception as e:
-        st.error(f"Gagal membaca file audio: {e}")
-        st.stop()
-
-    
-    # Ekstraksi fitur TSFEL
-    df_features = tsfel.time_series_features_extractor(cfg, signal, fs=sr)
-    X_new = df_features.values
-
-    # Normalisasi
-    X_new_scaled = scaler.transform(X_new)
-
-    # Prediksi
-    prediction = model.predict(X_new_scaled)
-    proba = model.predict_proba(X_new_scaled)[0]
-
-    label = prediction[0]
-    confidence = np.max(proba) * 100
-
-    # Hasil prediksi
-    st.success(f"🎯 Prediksi: **{label.upper()}** (Confidence: {confidence:.2f}%)")
+        st.error(f"❌ Terjadi error saat memproses audio: {e}")
 else:
     st.info("Silakan rekam atau unggah file suara terlebih dahulu untuk diprediksi.")
